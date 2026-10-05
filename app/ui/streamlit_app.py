@@ -38,6 +38,7 @@ st.session_state.setdefault("investigation", None)
 # escalation is linked to the recommendation that led to it.
 st.session_state.setdefault("request_ids", {})
 st.session_state.setdefault("notice", None)
+st.session_state.setdefault("active_incident", None)
 
 
 # ---------------------------------------------------------
@@ -938,6 +939,7 @@ def reset_demo_cb() -> None:
     except requests.exceptions.RequestException:
         ok = False
     st.session_state.messages = []
+    st.session_state.active_incident = None
     st.session_state.investigation = None
     st.session_state.request_ids = {}
     st.session_state.notice = None
@@ -967,6 +969,7 @@ def call_agent(question: str) -> dict:
             data = resp.json()
             result["content"] = data.get("answer", "")
             result["tools"] = tool_names(data)
+            result["incident_id"] = data.get("incident_id")
             if data.get("incident_id") and data.get("request_id"):
                 st.session_state.request_ids[data["incident_id"]] = data["request_id"]
         else:
@@ -1013,6 +1016,7 @@ def investigate_cb() -> None:
     if inc:
         # A new investigation replaces the previous one instead of stacking below it.
         st.session_state.messages = []
+        st.session_state.active_incident = None
         st.session_state.notice = None
         st.session_state.investigation = get_incident_details(inc)
         ask(f"Investigate {inc} and tell me what I should do.")
@@ -1031,6 +1035,7 @@ def investigate_from_kpi(incident_id: str) -> None:
 
 def clear_chat() -> None:
     st.session_state.messages = []
+    st.session_state.active_incident = None
 
 
 def transcript() -> str:
@@ -1193,8 +1198,6 @@ question = typed or st.session_state.pop("pending", None)
 left, right = st.columns([2.1, 1], gap="large")
 
 with left:
-    investigated = ((st.session_state.investigation or {}).get("incident") or {}).get("incident_id")
-
     if not st.session_state.messages and not question:
         st.markdown(
             """
@@ -1238,10 +1241,17 @@ with left:
             render_assistant(reply, animate=True)
 
         st.session_state.messages.extend([user_msg, reply])
+        # Chat questions (suggestion chips, typed text) name the incident too,
+        # so the action card follows whichever incident was last discussed.
+        if reply.get("incident_id"):
+            st.session_state.active_incident = reply["incident_id"]
 
     # The action and its audit trail follow the agent's answer. They are
     # rendered after it so the audit trail includes the answer just given.
-    if investigated:
+    investigated = st.session_state.get("active_incident") or (
+        ((st.session_state.investigation or {}).get("incident") or {}).get("incident_id")
+    )
+    if investigated and st.session_state.messages:
         with st.container(key="action"):
             render_escalation(investigated)
             render_audit_trail(investigated)

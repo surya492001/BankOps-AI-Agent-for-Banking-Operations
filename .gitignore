@@ -51,4 +51,4 @@ dist/
 *.tmp
 *.temp
 *.bak
-*.swp
+*.swp.Rhistory

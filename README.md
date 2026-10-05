@@ -1,199 +1,86 @@
 # BankOps AI
 
-**AI agent for banking operations** — investigates incidents, checks SLA
-exposure, looks up application health, retrieves the right SOP, and
-recommends an action that a human then approves.
+**AI Agent for Banking Operations**
 
-All banking data and services in this project are simulated. It is a
-self-initiated portfolio project; no real customer or bank data is used.
+BankOps AI is an AI-powered operations assistant designed to help banking operations teams investigate and respond to incidents faster.
 
-## The demo in one flow
+In a typical banking environment, operations teams may need to manually check incident records, SLA status, application health, and operational SOPs across multiple sources before deciding what action to take. BankOps AI brings these steps together into an AI-driven investigation workflow.
 
-`INC-1042` is the hero scenario: a P1 payment incident with a breached SLA
-on a degraded application.
+The agent retrieves verified incident and operational data, checks SLA status, evaluates the affected application's health, searches the SOP knowledge base using RAG, and generates an evidence-backed recommendation.
 
-1. **Dashboard** shows open P1s, SLA at risk / breached, degraded applications.
-2. **Investigate** — the agent calls its tools: incident, SLA, application, SOP.
-3. **Evidence-backed conclusion** — "ESCALATION RECOMMENDED - to Payments L2",
-   citing the P1 payment SOP.
-4. **Approve & escalate** — a human clicks the button. The agent cannot
-   escalate on its own.
-5. **Action** — the incident becomes `ESCALATED` and moves to Payments L2.
-6. **Audit trail** — the investigation and the approved action are recorded
-   under the same request ID.
+The system also includes an **audit trail** for recording agent investigations and recommendations, along with an **escalation capability** to support operational incident escalation workflows.
 
-## Features
+## Key Capabilities
 
-1. Incident investigation
-2. SLA monitoring (`WITHIN_SLA` / `AT_RISK` / `BREACHED`)
-3. Application health lookup
-4. RAG-based SOP retrieval (Chroma)
-5. Evidence-based agent reasoning (LangGraph + tool calling)
-6. No-SOP protection — if no SOP is relevant, the agent says so instead of inventing one
-7. Controlled incident escalation with human approval
-8. Audit trail
-9. Streamlit operations dashboard
+- **Incident Investigation** – Retrieves incident details including priority, status, description, application, and assigned team.
+- **SLA Monitoring** – Calculates elapsed time, remaining time, SLA status, and escalation requirements.
+- **Application Health Check** – Retrieves the current status and details of affected banking applications.
+- **RAG-based SOP Retrieval** – Searches the banking knowledge base using Chroma and returns SOP guidance only when an applicable document is found.
+- **Evidence-based Recommendations** – Separates retrieved operational facts from AI-generated recommendations.
+- **Incident Escalation** – Supports escalation workflows for incidents requiring operational intervention.
+- **Audit Trail** – Records investigation requests, tools used, sources, recommendations, approvals, and actions for traceability.
+- **Operations Dashboard** – Provides a Streamlit interface for viewing incidents, SLA status, application health, investigations, and agent activity.
 
 ## Architecture
 
-```
-Streamlit UI ──HTTP──> FastAPI
-                         ├── /agent/chat ──> LangGraph agent ──> LLM (OpenRouter)
-                         │                      ├── get_incident / list_incidents ──┐
-                         │                      ├── check_sla ──────────────────────┤
-                         │                      ├── get_application / list_applications ──> PostgreSQL
-                         │                      └── search_sop ──> Chroma (SOP markdown)
-                         ├── /incidents, /sla, /applications, /operations/summary
-                         ├── /incidents/{id}/escalate   (human-approved write)
-                         └── /audit
-```
+```text
+User
+  │
+  ▼
+Streamlit Operations Dashboard
+  │
+  ▼
+FastAPI
+  │
+  ▼
+LangGraph AI Agent
+  │
+  ├──────────────► PostgreSQL
+  │                 ├── Incidents
+  │                 ├── Applications
+  │                 ├── SLA
+  │                 └── Audit Logs
+  │
+  ├──────────────► Operational Tools
+  │                 ├── Incident Retrieval
+  │                 ├── SLA Check
+  │                 ├── Application Check
+  │                 └── Escalation
+  │
+  └──────────────► Chroma RAG
+                    │
+                    ▼
+               Banking SOPs
 
-The agent only has **read** tools. Escalation is a separate API action that
-requires `approved: true` and is only accepted when the incident is open and
-its SLA is `AT_RISK` or `BREACHED`. The same rule produces the escalation
-decision the agent reports, so its recommendation and the Approve & escalate
-button can never disagree.
-
-## Project structure
-
-```
-app/
-  main.py          FastAPI app; creates tables and seeds demo data on startup
-  api/             HTTP routes
-  agents/graph.py  LangGraph agent and system prompt
-  tools/           Agent tools (incident, SLA, application)
-  rag/             SOP ingest and retrieval
-  services/        SLA, escalation, audit and demo-data logic
-  models/          SQLAlchemy models
-  ui/              Streamlit dashboard
-data/knowledge_base/   SOP documents
-scripts/               SQL schema/seed reference, live scenario runner
-tests/                 pytest suite
-```
-
-## Setup
-
-Requirements: Python 3.12, Docker, an [OpenRouter](https://openrouter.ai) API key.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env          # then add your OPENROUTER_API_KEY
+                    │
+                    ▼
+        Evidence + Recommendation
 ```
 
-Start PostgreSQL:
+## Technology Stack
 
-```bash
-docker compose up -d
-```
+- Python
+- FastAPI
+- LangGraph
+- LangChain
+- PostgreSQL
+- Chroma
+- Hugging Face Embeddings
+- Streamlit
+- SQLAlchemy
+- Docker
+- LLM / Tool Calling
 
-Build the SOP index (run again whenever the SOP files change):
+## Example Use Case
 
-```bash
-python -m app.rag.ingest
-```
+A user can ask:
 
-Start the API. It creates the tables and seeds the demo incidents on first start:
+> **Investigate INC-1042**
 
-```bash
-uvicorn app.main:app --port 8000
-```
+The agent retrieves the incident, checks its SLA, identifies the affected application, searches the relevant SOP, evaluates the operational situation, and produces an evidence-backed recommendation.
 
-Start the dashboard in a second terminal:
+For example, when a P1 payment-processing incident is open and its SLA is breached, the agent can identify the breach, retrieve the applicable payment incident SOP, recommend escalation to the appropriate team, and record the investigation in the audit trail.
 
-```bash
-streamlit run app/ui/streamlit_app.py
-```
+## Project Goal
 
-Open http://localhost:8501. API docs are at http://localhost:8000/docs.
-
-**Reset demo data** in the sidebar restores the incidents and clears the
-audit trail. Use it before a demo: incident ages are relative to the reset
-time, so SLA states drift as time passes (`INC-1045` is `AT_RISK` for about
-20 minutes after a reset, then becomes `BREACHED`).
-
-## Adding an SOP
-
-Add a markdown file to `data/knowledge_base/` that starts with a header
-saying what it applies to, then run `python -m app.rag.ingest` again:
-
-```
----
-application: Card Management
-priority: P2
----
-
-# P2 Card Management Incident SOP
-```
-
-During an investigation the agent searches only the SOPs written for the
-incident's application. Vector similarity ranks SOPs well, but a distance
-score alone cannot tell whether an SOP really applies (generic incident
-wording scores close to every SOP), so applicability is decided by this
-header. If the application has no SOP, the agent is told
-`NO_APPLICABLE_SOP` and must say so.
-
-## Demo incidents
-
-| Incident | Scenario | Expected outcome |
-|----------|----------|------------------|
-| INC-1042 | P1, open, SLA breached, application degraded | Escalation recommended to Payments L2 |
-| INC-1045 | P1, open, SLA at risk | Escalation recommended to Payments L2 |
-| INC-1043 | P2, open, within SLA | Monitor; escalation not recommended |
-| INC-1044 | P2, resolved after an SLA breach | Post-incident review; escalation not applicable |
-| INC-1046 | P3 on ATM Switch, which has no SOP | "No applicable SOP was found" |
-
-## API
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/incidents`, `/incidents/{id}` | Incident records |
-| GET | `/sla/{id}` | SLA status for an incident |
-| GET | `/applications`, `/applications/{id}` | Application health |
-| GET | `/operations/summary` | Dashboard KPIs |
-| POST | `/agent/chat` | Ask the agent |
-| GET | `/incidents/{id}/escalation` | Whether the incident can be escalated, and to whom |
-| POST | `/incidents/{id}/escalate` | Escalate (requires `approved: true`) |
-| GET | `/audit?incident_id=` | Audit trail |
-| POST | `/demo/reset` | Restore demo data |
-
-## Testing
-
-Unit and API tests run on a temporary SQLite database and vector index, with
-a scripted stand-in for the LLM, so they need no database, API key or network:
-
-```bash
-pytest
-```
-
-They cover the API, SLA boundaries, escalation rules, agent tools, SOP
-retrieval (including the no-SOP cases) and the agent workflow.
-
-Live scenarios call the real LLM through the running API and check the
-answers for eleven cases (hero, at risk, within SLA, resolved, no SOP,
-unknown incident, already escalated, a user telling the agent to escalate,
-and others):
-
-```bash
-python scripts/run_scenarios.py
-```
-
-## Known limitations
-
-- Escalation teams come from the SLA policy, which is keyed by priority only.
-  A P2 Card Management incident would therefore escalate to "Payments L1".
-  The agent flags this kind of mismatch, but the data model does not yet
-  hold an escalation path per application.
-- A resolved incident has no resolution timestamp, so its SLA is still
-  measured against the current time.
-- No authentication. The approver name comes from `BANKOPS_OPERATOR`.
-- With the default `openrouter/free` model, OpenRouter may route each request
-  to a different free model, so answer style varies and free-tier rate limits
-  apply. Set `LLM_MODEL` to pin one.
-- Runs locally. Only PostgreSQL is containerised.
-
-## Tech stack
-
-Python, FastAPI, PostgreSQL, SQLAlchemy, LangGraph, LangChain, Chroma,
-sentence-transformers, OpenRouter, Streamlit, pytest, Docker.
+The goal of BankOps AI is not simply to provide a chatbot. It is designed as an **AI-powered operational agent** that can retrieve enterprise data, reason over operational context, use tools, ground recommendations in organizational knowledge, and maintain traceability of its decisions and actions.
