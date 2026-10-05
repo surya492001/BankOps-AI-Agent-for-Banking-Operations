@@ -1,12 +1,12 @@
 import os
 from pathlib import Path
 
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.tools import tool
 
 from app.database.database import SessionLocal
 from app.models.application import Application
+from app.rag.embeddings import OnnxMiniLMEmbeddings
 from app.rag.sop import BASE_DIR, load_sops
 
 
@@ -18,9 +18,7 @@ MAX_DISTANCE = 0.75
 NO_APPLICABLE_SOP = "NO_APPLICABLE_SOP"
 
 
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+embeddings = OnnxMiniLMEmbeddings()
 
 
 vectorstore = Chroma(

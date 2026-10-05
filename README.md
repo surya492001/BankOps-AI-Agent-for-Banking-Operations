@@ -1,13 +1,3 @@
----
-title: BankOps AI
-emoji: 🏦
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # BankOps AI
 
 **AI Agent for Banking Operations**
@@ -72,7 +62,7 @@ Evidence + recommendation ──► audit log
 - LangGraph and LangChain (tool-calling agent)
 - LLM through OpenRouter (model set by `LLM_MODEL`, default `openrouter/free`)
 - PostgreSQL (Docker)
-- Chroma with Hugging Face embeddings (`all-MiniLM-L6-v2`)
+- Chroma with ONNX embeddings (`all-MiniLM-L6-v2`, no torch)
 - Streamlit
 - pytest
 
@@ -108,13 +98,32 @@ Open http://localhost:8501. On first start the API creates the tables and loads 
 
 ## Deploying a demo link
 
-The `Dockerfile` packages the API and the UI in one container that runs on any Docker host. It uses SQLite with the demo data (re-seeded on every start) and builds the SOP index when it starts, so it needs no database service. It is set up for [Hugging Face Spaces](https://huggingface.co/spaces) (free):
+The simplest free host is [Streamlit Community Cloud](https://streamlit.io/cloud). It deploys straight from GitHub and needs no Docker or database service. The root `streamlit_app.py` runs the API inside the Streamlit process, so one app is enough. It uses SQLite with the demo data, re-seeded on every start, and builds the SOP index when it starts.
 
-1. Create a Space and choose the **Docker** SDK.
-2. Push this repository to the Space.
-3. Under **Settings → Variables and secrets**, add `OPENROUTER_API_KEY` as a secret, and `LLM_MODEL` and `APP_PASSWORD` as variables or secrets.
+1. Push the repository to GitHub.
+2. On Streamlit Community Cloud choose **Create app**, pick the repository and branch, and set the main file to `streamlit_app.py`. Under **Advanced settings** choose Python 3.12.
+3. In the same dialog open **Secrets** and add:
 
-`APP_PASSWORD` puts a password prompt in front of the UI. Set it for any public deployment, because the app uses your LLM key. To run the container locally:
+```toml
+OPENROUTER_API_KEY = "your key"
+LLM_MODEL = "anthropic/claude-haiku-4.5"
+APP_PASSWORD = "a password for visitors"
+```
+
+`APP_PASSWORD` puts a password prompt in front of the UI. Set it for any public deployment, because the app spends your LLM key.
+
+**Optional: keep data between restarts.** The hosted demo uses SQLite, so escalations and audit entries are lost whenever the app restarts or goes idle. To keep them, use a hosted PostgreSQL such as [Neon](https://neon.tech) or [Supabase](https://supabase.com), both of which have a free tier:
+
+1. Create a database and copy its connection string, in the form `postgresql://user:password@host/dbname?sslmode=require`.
+2. Add it to the app's secrets:
+
+```toml
+DATABASE_URL = "postgresql://user:password@host/dbname?sslmode=require"
+```
+
+On first start the app creates the tables and loads the demo data into that database, and later starts reuse it. **Reset demo data** in the sidebar restores the demo data and clears the audit trail.
+
+The `Dockerfile` and `start.sh` run the same single-container setup on any Docker host. To try it locally:
 
 ```bash
 docker build -t bankops-ai .
@@ -124,6 +133,7 @@ docker run -p 7860:7860 -e OPENROUTER_API_KEY=... bankops-ai
 ## Testing
 
 ```bash
+pip install -r requirements-dev.txt
 pytest
 ```
 

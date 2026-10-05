@@ -3,7 +3,7 @@ from pathlib import Path
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from app.rag.embeddings import OnnxMiniLMEmbeddings
 from langchain_chroma import Chroma
 
 from app.rag.sop import BASE_DIR, KNOWLEDGE_BASE_PATH, load_sops
@@ -11,7 +11,6 @@ from app.rag.sop import BASE_DIR, KNOWLEDGE_BASE_PATH, load_sops
 
 CHROMA_PATH = Path(os.getenv("CHROMA_PATH", BASE_DIR / "chroma_db"))
 
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 COLLECTION_NAME = "langchain"
 
 
@@ -62,9 +61,7 @@ def ingest(
 
     print(f"Created {len(chunks)} chunks")
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL
-    )
+    embeddings = OnnxMiniLMEmbeddings()
 
     print("Creating Chroma vector database...")
 
