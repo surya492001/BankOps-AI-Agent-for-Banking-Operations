@@ -1,0 +1,5 @@
+# Dependencies for the dashboard only (Streamlit Community Cloud installs
+# this file because it sits next to the main file). The backend's heavier
+# dependencies are in the root requirements.txt.
+streamlit==1.65.0
+requests==2.34.2

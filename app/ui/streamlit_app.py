@@ -12,6 +12,12 @@ import streamlit as st
 
 API_URL = os.getenv("BANKOPS_API_URL", "http://127.0.0.1:8000")
 
+# A deployed API requires this key (see app/security.py).
+API_KEY = os.getenv("BANKOPS_API_KEY")
+api = requests.Session()
+if API_KEY:
+    api.headers["X-API-Key"] = API_KEY
+
 # Recorded in the audit trail as the person who approved an escalation.
 OPERATOR = os.getenv("BANKOPS_OPERATOR", "operations.engineer")
 
@@ -490,17 +496,31 @@ st.markdown(
 
 @st.cache_data(ttl=10, show_spinner=False)
 def api_is_up(url: str) -> bool:
-    """FastAPI serves /docs by default, so it works as a cheap liveness check."""
+    """Cheap liveness check against the API's open /health route."""
     try:
-        return requests.get(f"{url}/docs", timeout=1.5).status_code < 500
+        return api.get(f"{url}/health", timeout=1.5).status_code < 500
     except requests.exceptions.RequestException:
         return False
+
+
+def wait_for_api(url: str, seconds: int) -> bool:
+    """Poll /health until the API answers. Free hosts sleep when idle and take a minute to wake."""
+    deadline = time.time() + seconds
+    while True:
+        try:
+            if api.get(f"{url}/health", timeout=5).status_code < 500:
+                return True
+        except requests.exceptions.RequestException:
+            pass
+        if time.time() >= deadline:
+            return False
+        time.sleep(3)
 
 
 def get_operations_summary() -> dict:
     """Fetch live dashboard KPI values from FastAPI/PostgreSQL."""
     try:
-        resp = requests.get(f"{API_URL}/operations/summary", timeout=10)
+        resp = api.get(f"{API_URL}/operations/summary", timeout=10)
         if resp.status_code == 200:
             return resp.json()
         st.warning(f"Unable to load live operations metrics (API status {resp.status_code}).", icon=":material/warning:")
@@ -514,7 +534,7 @@ def get_operations_summary() -> dict:
 def get_filtered_incidents(filter_type: str) -> list[dict]:
     """Fetch incident records and filter them by KPI/SLA state."""
     try:
-        resp = requests.get(f"{API_URL}/incidents", timeout=10)
+        resp = api.get(f"{API_URL}/incidents", timeout=10)
         if resp.status_code != 200:
             return []
 
@@ -545,7 +565,7 @@ def get_filtered_incidents(filter_type: str) -> list[dict]:
             continue
 
         try:
-            sla_resp = requests.get(
+            sla_resp = api.get(
                 f"{API_URL}/sla/{incident_id}",
                 timeout=5,
             )
@@ -584,7 +604,7 @@ def render_kpi_details(filter_type: str) -> None:
 
     if filter_type == "degraded":
         try:
-            resp = requests.get(f"{API_URL}/applications", timeout=10)
+            resp = api.get(f"{API_URL}/applications", timeout=10)
             data = resp.json() if resp.status_code == 200 else []
             if isinstance(data, dict):
                 data = data.get("items", data.get("applications", []))
@@ -666,7 +686,7 @@ def get_incident_details(incident_id: str) -> dict:
     result = {"incident": None, "sla": None, "application": None, "errors": []}
 
     try:
-        resp = requests.get(f"{API_URL}/incidents/{incident_id}", timeout=10)
+        resp = api.get(f"{API_URL}/incidents/{incident_id}", timeout=10)
         if resp.status_code == 200:
             result["incident"] = resp.json()
         elif resp.status_code == 404:
@@ -680,7 +700,7 @@ def get_incident_details(incident_id: str) -> dict:
         return result
 
     try:
-        resp = requests.get(f"{API_URL}/sla/{incident_id}", timeout=10)
+        resp = api.get(f"{API_URL}/sla/{incident_id}", timeout=10)
         if resp.status_code == 200:
             result["sla"] = resp.json()
         elif resp.status_code != 404:
@@ -691,7 +711,7 @@ def get_incident_details(incident_id: str) -> dict:
     application_id = result["incident"].get("application_id")
     if application_id is not None:
         try:
-            resp = requests.get(f"{API_URL}/applications/{application_id}", timeout=10)
+            resp = api.get(f"{API_URL}/applications/{application_id}", timeout=10)
             if resp.status_code == 200:
                 result["application"] = resp.json()
             elif resp.status_code != 404:
@@ -825,7 +845,7 @@ def render_investigation(details: dict) -> None:
 def get_json(path: str, params: dict | None = None):
     """GET a JSON resource from the API, or None when it is unavailable."""
     try:
-        resp = requests.get(f"{API_URL}{path}", params=params, timeout=10)
+        resp = api.get(f"{API_URL}{path}", params=params, timeout=10)
     except requests.exceptions.RequestException:
         return None
     return resp.json() if resp.status_code == 200 else None
@@ -847,7 +867,7 @@ def escalate_cb(incident_id: str) -> None:
         "request_id": st.session_state.request_ids.get(incident_id),
     }
     try:
-        resp = requests.post(
+        resp = api.post(
             f"{API_URL}/incidents/{incident_id}/escalate", json=payload, timeout=10
         )
         if resp.status_code == 200:
@@ -947,7 +967,7 @@ def render_audit_trail(incident_id: str) -> None:
 def reset_demo_cb() -> None:
     """Restore the synthetic incidents and clear the audit trail for a fresh demo."""
     try:
-        resp = requests.post(f"{API_URL}/demo/reset", params={"clear_audit": True}, timeout=15)
+        resp = api.post(f"{API_URL}/demo/reset", params={"clear_audit": True}, timeout=15)
         ok = resp.status_code == 200
     except requests.exceptions.RequestException:
         ok = False
@@ -975,7 +995,7 @@ def call_agent(question: str) -> dict:
     started = time.time()
     result = {"role": "assistant", "content": "", "tools": [], "error": None, "secs": 0.0}
     try:
-        resp = requests.post(
+        resp = api.post(
             f"{API_URL}/agent/chat", json={"question": question}, timeout=120
         )
         if resp.status_code == 200:
@@ -1105,6 +1125,13 @@ with st.sidebar:
 # ---------------------------------------------------------
 # HERO + KPIs
 # ---------------------------------------------------------
+
+# A local API answers at once. A remote one may be asleep, so wait for it
+# once per session instead of showing "unreachable" on the first visit.
+if not st.session_state.get("api_awake"):
+    is_local = API_URL.startswith(("http://127.0.0.1", "http://localhost"))
+    with st.spinner("Waking the backend. Free hosting sleeps when idle, which can take up to a minute…"):
+        st.session_state.api_awake = wait_for_api(API_URL, 3 if is_local else 90)
 
 online = api_is_up(API_URL)
 pill = (

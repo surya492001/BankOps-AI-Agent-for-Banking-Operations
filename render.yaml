@@ -1,0 +1,34 @@
+# Render Blueprint: managed PostgreSQL plus the FastAPI backend.
+# The dashboard runs separately on Streamlit Community Cloud.
+databases:
+  - name: bankops-db
+    plan: free
+    databaseName: bankops
+    user: bankops
+
+services:
+  - type: web
+    name: bankops-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.rag.ingest && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bankops-db
+          property: connectionString
+      - key: CHROMA_PATH
+        value: /tmp/chroma_db
+      - key: LLM_MODEL
+        value: anthropic/claude-haiku-4.5
+      # Render asks for this one when the blueprint is created.
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # Shared secret the dashboard sends. Render generates it; copy it into
+      # the Streamlit secrets as BANKOPS_API_KEY.
+      - key: API_KEY
+        generateValue: true
