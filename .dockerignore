@@ -1,0 +1,15 @@
+.venv/
+.git/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+chroma_db/
+*.db
+*.docx
+.Rhistory
+docs/
+tests/
+.DS_Store

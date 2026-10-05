@@ -29,6 +29,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Optional password gate for a public deployment. Unset = open (local use).
+APP_PASSWORD = os.getenv("APP_PASSWORD")
+if APP_PASSWORD and not st.session_state.get("unlocked"):
+    st.title("BankOps AI")
+    st.caption("This demo is password protected.")
+    entered = st.text_input("Password", type="password")
+    if entered:
+        if entered == APP_PASSWORD:
+            st.session_state.unlocked = True
+            st.rerun()
+        st.error("Incorrect password.")
+    st.stop()
+
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("pending", None)
 st.session_state.setdefault("incident_id", "INC-1042")

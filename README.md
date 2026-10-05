@@ -1,3 +1,13 @@
+---
+title: BankOps AI
+emoji: 🏦
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # BankOps AI
 
 **AI Agent for Banking Operations**
@@ -95,6 +105,21 @@ streamlit run app/ui/streamlit_app.py
 ```
 
 Open http://localhost:8501. On first start the API creates the tables and loads the demo data (4 applications, 3 SLA policies, 5 incidents).
+
+## Deploying a demo link
+
+The `Dockerfile` packages the API and the UI in one container that runs on any Docker host. It uses SQLite with the demo data (re-seeded on every start) and builds the SOP index when it starts, so it needs no database service. It is set up for [Hugging Face Spaces](https://huggingface.co/spaces) (free):
+
+1. Create a Space and choose the **Docker** SDK.
+2. Push this repository to the Space.
+3. Under **Settings → Variables and secrets**, add `OPENROUTER_API_KEY` as a secret, and `LLM_MODEL` and `APP_PASSWORD` as variables or secrets.
+
+`APP_PASSWORD` puts a password prompt in front of the UI. Set it for any public deployment, because the app uses your LLM key. To run the container locally:
+
+```bash
+docker build -t bankops-ai .
+docker run -p 7860:7860 -e OPENROUTER_API_KEY=... bankops-ai
+```
 
 ## Testing
 
