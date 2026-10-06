@@ -24,7 +24,7 @@ services:
       - key: CHROMA_PATH
         value: /tmp/chroma_db
       - key: LLM_MODEL
-        value: anthropic/claude-haiku-4.5
+        value: openrouter/free
       # Render asks for this one when the blueprint is created.
       - key: OPENROUTER_API_KEY
         sync: false

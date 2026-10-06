@@ -111,7 +111,7 @@ The code lives on GitHub. Render hosts the database and the API, and Streamlit C
 `render.yaml` is a Render Blueprint that creates a free PostgreSQL database and the API service.
 
 1. On [Render](https://render.com) choose **New → Blueprint**, connect your GitHub repository, and apply it.
-2. When asked, enter `OPENROUTER_API_KEY`. The blueprint sets `LLM_MODEL` to `anthropic/claude-haiku-4.5`, wires `DATABASE_URL` to the database, and generates an `API_KEY`.
+2. When asked, enter `OPENROUTER_API_KEY`. The blueprint sets `LLM_MODEL` to `openrouter/free` (change it to a paid model such as `anthropic/claude-haiku-4.5` for steadier answers), wires `DATABASE_URL` to the database, and generates an `API_KEY`.
 3. After the deploy, copy the service URL (`https://bankops-api-xxxx.onrender.com`) and open the service's **Environment** tab to copy the generated `API_KEY`.
 4. Check `https://<your-service>.onrender.com/health`. It should return `{"status":"ok"}`.
 
